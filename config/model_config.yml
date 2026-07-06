@@ -1,0 +1,262 @@
+# Model Configuration
+model:
+  name: "MoK_cnn"  # Model name for logging and checkpointing
+  architecture: "cnn"  # Options: "cnn" (current/default), "cnn_v1" (old version), "cnn_v2" (with positional embeddings from lat/lon)
+  spatial_input_shape: [1440, 481]  # 36 channels: 15 surface + 18 pressure + 1 land_sea_mask + 2 coords
+  target: 1
+  num_classes: 1  # Number of classes for classification (0-8 for binned onset dates)
+  dropout_rate: 0.5  # Dropout probability for fc1, fc2, fc3, and fc4 layers
+
+  # CNN V2 Positional Embedding Configuration (only used when architecture="cnn_v2")
+  pos_embedding_dim: 16  # Dimension of positional embedding from lat/lon (default: 16)
+  num_frequencies: 16  # Number of sinusoidal frequencies for positional encoding (default: 16)
+
+  # Spatial Pyramid Pooling Configuration
+  spp_option: 0  # 0: max pool only, 1: avg pool only, 2: max and avg pool (concatenated)
+  spp_ops: [1, 2, 4]  # List of output pool sizes for each pyramid level (e.g., [1, 2, 4])
+                # [1] = single 1x1 pooling (global pooling)
+                # [1, 2] = 1x1 and 2x2 pooling (multi-scale)
+                # [1, 2, 4] = 1x1, 2x2, and 4x4 pooling (full pyramid)
+
+  # Normalization Configuration
+  # CNNNorm: Type of normalization to use in the CNN
+  # 0: BatchNormalization (normalizes across batch dimension)
+  # 1: LayerNormalization (normalizes across channel dimension)
+  # 2: InstanceNormalization (normalizes per sample and channel)
+  # 3: GroupNormalization (normalizes in groups of channels)
+  cnn_norm: 1  # Default: BatchNormalization
+  cnn_norm_num_groups: 32  # Number of groups for GroupNormalization (only used when cnn_norm=3)
+
+  # Activation Function Configuration
+  activation:
+    type: "leaky_relu"  # Options: "relu", "prelu", "leaky_relu"
+    # PReLU options (only used when type="prelu")
+    prelu_mode: "channel"  # Options: "shared" (1 param), "channel" (1 param per channel)
+    # LeakyReLU options (only used when type="leaky_relu")
+    leaky_relu_slope: 0.2  # Negative slope for LeakyReLU (typical: 0.01 to 0.2)
+
+  # Weight Initialization
+  weight_init:
+    enabled: true  # If false, use PyTorch's default initialization
+    method: "xavier_uniform"  # Options: kaiming_normal, kaiming_uniform, xavier_normal, xavier_uniform, orthogonal, normal, uniform, constant, zeros, ones, default
+    activation: "leaky_relu"  # Activation function type (relu, leaky_relu, tanh, sigmoid, elu, gelu)
+    bias_init: "uniform"  # Bias initialization (zeros, constant, normal, uniform)
+    bias_value: 0.0  # Value for constant bias init
+    mode: "fan_out"  # Mode for kaiming init (fan_in or fan_out)
+    gain: 1.0  # Gain for xavier/orthogonal init
+    verbose: true  # Print initialization details
+
+# Training Configuration
+training:
+  epochs: 100 # batch size is set in data section
+  learning_rate: 1.0e-04 # 2.8e-05 good for cnn v2
+  optimizer: "rmsprop"  # Options: "adam", "adamw", "sgd", "rmsprop"
+  loss: "mse"  # cross_entropy for multiclass classification
+  random_seed: 42  # For reproducibility
+  weight_decay: 0.00001  # L2 regularization strength (typical values: 1e-4 to 1e-5)
+
+  # Validation metric for model selection and early stopping
+  # Options: "loss", "mae", "rmse", "r2", "skill_score", "f1_score" (classification)
+  # For regression: "mae", "rmse", "r2", or "skill_score" recommended
+  # For classification: "loss" or "f1_score"
+  val_metric: "skill_score"  # Metric to monitor for best model selection
+
+  # Mode for validation metric (only needed for custom metrics)
+  # "min": lower is better (loss, mae, rmse)
+  # "max": higher is better (r2, skill_score, f1_score)
+  # If not specified, mode is auto-determined based on metric name
+  val_metric_mode: "max"  # Optional: specify "min" or "max", or leave blank for auto
+
+  # RMSprop specific parameters (only used when optimizer="rmsprop")
+  rmsprop_alpha: 0.99  # Smoothing constant for squared gradient (default: 0.99)
+  rmsprop_eps: 1.0e-8  # Term added for numerical stability (default: 1e-8)
+  rmsprop_momentum: 0.9  # Momentum factor (default: 0.0, typical: 0.9)
+
+  # Learning Rate Scheduler
+  # Options: "ReduceLROnPlateau", "StepLR", "OneCycleLR", "ExponentialLR"
+  lr_scheduler:
+    enabled: true
+    type: "ReduceLROnPlateau"  # Scheduler type
+
+    # ReduceLROnPlateau: Reduce LR when metric plateaus
+    # Note: The scheduler mode is automatically set to match val_metric_mode
+    #       No need to specify mode here - it will use the same mode as validation metric
+    factor: 0.5  # Multiply LR by this factor when reducing (new_lr = lr * factor)
+    patience: 5  # Number of epochs with no improvement before reducing LR
+    min_lr: 1.0e-6  # Minimum learning rate
+    threshold: 1.0e-4  # Threshold for measuring improvement
+    restore_best_on_reduce: true  # If true, restore model/optimizer to best epoch when LR is reduced
+
+    # StepLR: Step decay every N epochs
+    # Example config:
+    #   type: "StepLR"
+    #   step_size: 30  # Reduce LR every 30 epochs
+    #   gamma: 0.1     # LR *= 0.1 at each step
+    # ExponentialLR: Exponential decay every epoch
+    # Example config:
+    #   type: "ExponentialLR"
+    #   gamma: 0.95  # LR *= 0.95 every epoch (lr_epoch = lr_initial × gamma^epoch)
+    step_size: 30
+    gamma: 0.1
+
+    # OneCycleLR: Cyclical learning rate with warmup and annealing
+    # Example config:
+    #   type: "OneCycleLR"
+    #   max_lr: 0.1              # Peak learning rate
+    #   pct_start: 0.3           # Percent of cycle spent increasing LR (warmup)
+    #   anneal_strategy: "cos"   # 'cos' or 'linear'
+    #   div_factor: 25.0         # initial_lr = max_lr / div_factor
+    #   final_div_factor: 1e4    # final_lr = max_lr / (div_factor * final_div_factor)
+    max_lr: 0.1
+    pct_start: 0.3
+    anneal_strategy: "cos"
+    div_factor: 25.0
+    final_div_factor: 10000.0
+
+    
+
+  # Callbacks
+  early_stopping:
+    enabled: false
+    patience: 10
+    monitor: "val_loss"
+
+  checkpoint:
+    enabled: true
+    save_best_only: true
+    monitor: "val_loss"
+
+# Data Configuration
+data:
+  # Dataset type: "preprocessed" (preprocessed monthly or weekly data) or "raw" (6-hourly raw data with aggregation)
+  dataset_type: "preprocessed"  # Options: "preprocessed", "raw"
+
+  # Path to ERA5 data
+  # For dataset_type="preprocessed": Path to preprocessed monthly or weekly NetCDF files
+  # For dataset_type="raw": Base directory containing variable folders
+  data_dir: "/gdata2/ERA5/weekly"
+
+  # Path to target CSV file (Year, DateRelJun01, OnsetBin, OnsetBinCode)
+  # For classification: use MoKDates_binned.csv with OnsetBinCode (0-8)
+  target_file: "/home/deepakns/Work/data/MoKDates_binned.csv"
+
+  # Input variables to use from the data
+  # Surface variables: sst, ttr, tcc, t2m, msl
+  input_geo_var_surf: [t2m, ttr, tcc, msl]
+  # Pressure level variables: u, v, z
+  input_geo_var_press: [u, v]
+
+  # Source directory mappings for raw dataset (only used when dataset_type="raw")
+  # These specify the folder names under data_dir for each variable
+  # Format: <variable>_60S_60N_all_lon_6h
+  # If not specified, defaults to: {variable}_60S_60N_all_lon_6h
+  input_geo_var_surf_src: [t2m_60S_60N_all_lon_6h, olr_60S_60N_all_lon_6h, tcc_60S_60N_all_lon_6h, mslp_60S_60N_all_lon_6h]
+  input_geo_var_press_src: [u_60S_60N_all_lon_6h, v_60S_60N_all_lon_6h]
+
+  # Temporal aggregation for raw dataset (only used when dataset_type="raw")
+  # Options: "daily" (24h average), "3day" (3-day average), "weekly" (7-day average), "monthly" (monthly average)
+  # After aggregation, time_steps will index into the aggregated time series
+  temporal_aggregation: "monthly"
+
+  # Optional static channels (set to false to exclude)
+  # IMPORTANT: For CNN V2, lat and lon MUST be loaded (set to true) so they can be extracted
+  # and used for positional embeddings. They will be automatically removed from input channels.
+  # For CNN/CNN V1, lat and lon are included as regular input channels if set to true
+  include_lat: false
+  include_lon: false
+  include_landsea: false
+
+  # Year specifications can be:
+  # - Single years: 1962, 1965
+  # - Ranges: "1950:1960" (inclusive, both start and end)
+  # - Mix of both: ["1950:1960", 1962, "1964:2000"]
+  train_years: ["1951:1970","1981:2010"]
+  val_years: ["1971:1980"]
+  test_years: ["2011:2024"]
+
+  # DataLoader settings
+  batch_size: 1
+  num_workers: 0
+
+  # Dataset settings
+  # Time step indices to load per year (each year produces ONE sample)
+  # For example, time_steps: [0, 1, 2] will load the first 3 months (e.g., Feb, Mar, Apr)
+  # Non-consecutive steps are allowed: [0, 2, 4] will load months 1, 3, 5
+  # Each time step is stacked as a separate channel
+  time_steps: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+  pressure_levels: [0, 1]  # Indices of pressure levels to extract
+
+  # Normalization strategy
+  # 0: No normalization (raw data)
+  # 1: Normalize using training data statistics (spatially-varying mean/std)
+  # Future: Additional strategies can be added
+  normalize_strategy: 1
+
+  # Per-channel min-max normalization
+  # If true, applies per-channel min-max normalization [0, 1] after the normalize_strategy
+  # Can be used independently (with normalize_strategy: 0) or in combination (with normalize_strategy: 1)
+  # This normalizes each geospatial channel independently to [0, 1] range
+  # Static channels (lat, lon, land_sea_mask) are excluded from this normalization
+  add_per_channel_norm: false
+
+  augmentation:
+    enabled: true # not yet active
+    rotation_range: 15
+    width_shift_range: 0.1
+    height_shift_range: 0.1
+    horizontal_flip: true # not yet active
+    # Gaussian noise augmentation (applied during training only)
+    gaussian_noise:
+      enabled: true
+      std: 0.1  # Standard deviation of noise (relative to normalized data, typical: 0.01-0.1)
+
+# Logging
+logging:
+  log_dir: "logs"
+  tensorboard: true  # Keep TensorBoard enabled
+  save_frequency: 1
+
+  # Weights & Biases Configuration - ENABLED
+  wandb:
+    enabled: true  # ← Set to true to enable W&B
+
+    # Basic Settings
+    project: "MoK_date_predict"  # W&B project name
+    entity: null  # Your W&B username or team (null = use default)
+    name: null  # Run name (null = auto-generate from model name)
+
+    # Organization
+    tags:  # Tags for organizing experiments
+      - "with-scheduler-ReduceLROnPlateau"
+      - "batch_size-6"
+      - "dropout-0.5"
+      - "initial-xavier-uniform"
+      - "coarsen-to4x4"
+      - "data-augmentation-Gaussian-0.1"
+      - "LeakyReLU"
+      - "mse"
+      - "val-skill_score"
+      - "rmsprop"
+      - "t2m instead of sst"
+      - "calculate skill score"
+      - "v0 model"
+      - "val-1971-1980"
+      - "Feb+March+April"
+      - "Layer Normalization"
+      - "SPP-1-2-4"
+      - "SPP-max"
+      - "Include Lat Lon"
+      #- "Embed Dim 16"
+      - "starting-lr-1e-4"
+      - "weekly data old pipeline"
+    notes: "Training v0 Model with weekly data"  # Experiment notes
+
+    # Logging Options
+    log_model: true  # Save best model checkpoint to W&B
+    log_predictions: false  # Don't log prediction tables (saves time/space)
+    log_gradients: false  # Don't log gradient histograms (saves time)
+
+    # Advanced Options
+    watch_model: false  # Don't use wandb.watch() (can slow training)
+    watch_log: "gradients"  # What to log if watch_model is true
+    watch_freq: 100  # How often to log if watch_model is true
