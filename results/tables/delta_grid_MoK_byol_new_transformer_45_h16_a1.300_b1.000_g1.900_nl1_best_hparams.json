@@ -1,0 +1,12 @@
+{
+  "model_name": "new_delta_v5_grid_MoK_byol_new_transformer_45_h16_a1.300_b1.000_g1.900_nl1",
+  "feature_subdir": "MoK_byol_new_transformer_45",
+  "hidden_dim": 16,
+  "num_layers": 1,
+  "alpha": 1.3,
+  "beta": 1.0,
+  "gamma": 1.9,
+  "test_loss": 2.681565999984741,
+  "best_val_mse": 46.56713104248047,
+  "seed": 55
+}

@@ -1,0 +1,46 @@
+model_name: MoK_byol_new_transformer_45
+runs:
+- timestamp_ist: '2026-04-19T11:17:44+05:30'
+  model_name: MoK_byol_new_transformer_45
+  args:
+    config: config/model_config.yml
+    device: cuda:1
+    model_name: null
+    epochs: null
+    seed: 42
+    embed_dim: 512
+    proj_dim: 1024
+    momentum_coeff: 0.9
+    noise_std: 0.1
+    spatial_mask: 0.4
+    channel_dropout: 0.0
+    blur_prob: 0.3
+    blur_sigma: 0.1
+    crop_prob: 0.5
+    crop_scale_min: 0.6
+    crop_scale_max: 1.0
+    force_recompute_stats: false
+    use_lr_scheduler: true
+    monitor_collapse: true
+- timestamp_ist: '2026-04-19T11:32:46+05:30'
+  model_name: MoK_byol_new_transformer_45
+  args:
+    config: config/model_config.yml
+    device: cuda:0
+    model_name: null
+    epochs: null
+    seed: 42
+    embed_dim: 512
+    proj_dim: 1024
+    momentum_coeff: 0.9
+    noise_std: 0.1
+    spatial_mask: 0.4
+    channel_dropout: 0.0
+    blur_prob: 0.3
+    blur_sigma: 0.1
+    crop_prob: 0.5
+    crop_scale_min: 0.6
+    crop_scale_max: 1.0
+    force_recompute_stats: false
+    use_lr_scheduler: true
+    monitor_collapse: true
